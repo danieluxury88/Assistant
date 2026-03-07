@@ -318,47 +318,68 @@ def commit(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     model: str = typer.Option(None, "--model", "-m", help="Override AI model name."),
 ) -> None:
-    """Generate a commit suggestion and optionally create the commit."""
+    """Generate commit suggestions and commit all staged changes, one group at a time."""
     from commit_sage.commit_generator import generate_suggestion
     from commit_sage.executor import confirm_and_commit
     from commit_sage.llm_client import LLMError
+    from rich.prompt import Confirm
 
     cwd = _require_git_repo()
+    commits_made = 0
 
-    with console.status("[bold blue]Analyzing changes...[/bold blue]"):
-        summary = _load_summary(cwd, staged_only=staged_only)
+    while True:
+        with console.status("[bold blue]Analyzing changes...[/bold blue]"):
+            summary = _load_summary(cwd, staged_only=staged_only)
 
-    all_files = list({*summary.staged_files, *summary.unstaged_files})
-    if not all_files:
-        console.print("[yellow]No changes detected. Nothing to commit.[/yellow]")
-        raise typer.Exit(0)
+        if not summary.staged_files:
+            if commits_made == 0:
+                console.print(
+                    "[yellow]Warning:[/yellow] No staged files detected. "
+                    "Stage files with [bold]git add[/bold] before committing."
+                )
+                raise typer.Exit(1)
+            console.print(f"\n[bold green]Done.[/bold green] {commits_made} commit(s) created.")
+            break
 
-    if not summary.staged_files:
+        # Handle mixed changes interactively
+        include_files: list[str] | None = None
+        if len(summary.mixed_areas) > 1:
+            summary, include_files = _handle_mixed_changes(summary, cwd, staged_only=staged_only)
+
+        # Re-check after possible unstaging
+        if not summary.staged_files:
+            console.print("[yellow]No staged files remain. Nothing to commit.[/yellow]")
+            break
+
+        with console.status("[bold blue]Asking AI for a commit suggestion...[/bold blue]"):
+            try:
+                suggestion = generate_suggestion(summary, model=model)
+            except LLMError as e:
+                err_console.print(f"[bold red]AI error:[/bold red] {e}")
+                raise typer.Exit(1)
+
+        _render_suggestion(suggestion)
+        committed = confirm_and_commit(suggestion, cwd=cwd, auto_confirm=yes, include_files=include_files)
+
+        if not committed:
+            # User declined this commit — stop the loop
+            break
+
+        commits_made += 1
+
+        # Check whether there are still staged files for another round
+        remaining = _load_summary(cwd, staged_only=staged_only)
+        if not remaining.staged_files:
+            console.print(f"\n[bold green]Done.[/bold green] {commits_made} commit(s) created.")
+            break
+
+        remaining_count = len(remaining.staged_files)
         console.print(
-            "[yellow]Warning:[/yellow] No staged files detected. "
-            "Stage files with [bold]git add[/bold] before committing."
+            f"\n[dim]{remaining_count} staged file(s) still pending.[/dim]"
         )
-        raise typer.Exit(1)
-
-    # Handle mixed changes interactively
-    include_files: list[str] | None = None
-    if len(summary.mixed_areas) > 1:
-        summary, include_files = _handle_mixed_changes(summary, cwd, staged_only=staged_only)
-
-    # Re-check staged files after possible unstaging
-    if not summary.staged_files:
-        console.print("[yellow]No staged files remain. Nothing to commit.[/yellow]")
-        raise typer.Exit(0)
-
-    with console.status("[bold blue]Asking AI for a commit suggestion...[/bold blue]"):
-        try:
-            suggestion = generate_suggestion(summary, model=model)
-        except LLMError as e:
-            err_console.print(f"[bold red]AI error:[/bold red] {e}")
-            raise typer.Exit(1)
-
-    _render_suggestion(suggestion)
-    confirm_and_commit(suggestion, cwd=cwd, auto_confirm=yes, include_files=include_files)
+        if not yes and not Confirm.ask("Continue to next commit?", default=True):
+            console.print(f"[dim]Stopped. {commits_made} commit(s) created. Remaining files stay staged.[/dim]")
+            break
 
 
 def _render_suggestion(suggestion) -> None:
