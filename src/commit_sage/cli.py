@@ -157,6 +157,74 @@ def _handle_mixed_changes(
     return summary, None
 
 
+def _offer_staging(cwd: Path) -> bool:
+    """
+    Show unstaged/untracked files and offer to stage them interactively.
+    Returns True if any files were staged, False otherwise.
+    Never stages anything without explicit user confirmation.
+    """
+    from commit_sage.git_tools import get_stageable_files, stage_files, GitError
+    from commit_sage.classifiers import classify_file
+
+    candidates = get_stageable_files(cwd)
+    if not candidates:
+        return False
+
+    console.print()
+    table = Table(title="Unstaged / Untracked Files", box=box.SIMPLE, show_header=True)
+    table.add_column("#", style="bold cyan", width=3)
+    table.add_column("Status", style="yellow", width=10)
+    table.add_column("Category", style="dim", width=12)
+    table.add_column("File", style="white")
+
+    for i, f in enumerate(candidates, start=1):
+        status = "untracked" if f.status_code == "?" else "modified"
+        cat = classify_file(f.path)
+        table.add_row(str(i), status, cat, f.path)
+
+    console.print(table)
+
+    if not Confirm.ask("Stage some of these files before committing?", default=True):
+        return False
+
+    raw = Prompt.ask(
+        "Enter numbers to stage (space-separated), or [bold]a[/bold] for all",
+        default="a",
+    ).strip().lower()
+
+    if raw == "a":
+        to_stage = [f.path for f in candidates]
+    else:
+        chosen: list[int] = []
+        for token in raw.split():
+            try:
+                idx = int(token) - 1
+                if 0 <= idx < len(candidates):
+                    chosen.append(idx)
+            except ValueError:
+                pass
+        if not chosen:
+            console.print("[dim]No valid selection. Nothing staged.[/dim]")
+            return False
+        to_stage = [candidates[i].path for i in chosen]
+
+    console.print("\nAbout to [bold green]stage[/bold green]:")
+    for f in to_stage:
+        console.print(f"  [green]+[/green] {f}")
+
+    if not Confirm.ask("Confirm?", default=True):
+        console.print("[dim]Cancelled. Nothing staged.[/dim]")
+        return False
+
+    try:
+        stage_files(to_stage, cwd=cwd)
+        console.print(f"[green]Staged {len(to_stage)} file(s).[/green]")
+        return True
+    except GitError as e:
+        err_console.print(f"[bold red]Git error:[/bold red] {e}")
+        raise typer.Exit(1)
+
+
 def _handle_discard(summary, cwd: Path):
     """
     Interactive discard: show staged files, ask which to unstage.
@@ -333,13 +401,26 @@ def commit(
 
         if not summary.staged_files:
             if commits_made == 0:
-                console.print(
-                    "[yellow]Warning:[/yellow] No staged files detected. "
-                    "Stage files with [bold]git add[/bold] before committing."
-                )
-                raise typer.Exit(1)
-            console.print(f"\n[bold green]Done.[/bold green] {commits_made} commit(s) created.")
-            break
+                # Nothing staged — offer to stage unstaged/untracked files
+                staged_any = _offer_staging(cwd)
+                if not staged_any:
+                    console.print(
+                        "\n[yellow]Nothing staged. Stage files with [bold]git add[/bold] and try again.[/yellow]"
+                    )
+                    raise typer.Exit(1)
+                # Reload after staging
+                continue
+            else:
+                # All done — check for remaining unstaged files and mention them
+                from commit_sage.git_tools import get_stageable_files
+                leftover = get_stageable_files(cwd)
+                console.print(f"\n[bold green]Done.[/bold green] {commits_made} commit(s) created.")
+                if leftover:
+                    console.print(
+                        f"[dim]{len(leftover)} unstaged/untracked file(s) were not committed. "
+                        "Stage them and run [bold]commit-sage commit[/bold] again.[/dim]"
+                    )
+                break
 
         # Handle mixed changes interactively
         include_files: list[str] | None = None
@@ -362,7 +443,6 @@ def commit(
         committed = confirm_and_commit(suggestion, cwd=cwd, auto_confirm=yes, include_files=include_files)
 
         if not committed:
-            # User declined this commit — stop the loop
             break
 
         commits_made += 1
@@ -370,13 +450,11 @@ def commit(
         # Check whether there are still staged files for another round
         remaining = _load_summary(cwd, staged_only=staged_only)
         if not remaining.staged_files:
-            console.print(f"\n[bold green]Done.[/bold green] {commits_made} commit(s) created.")
-            break
+            # Will be handled at top of next loop iteration
+            continue
 
         remaining_count = len(remaining.staged_files)
-        console.print(
-            f"\n[dim]{remaining_count} staged file(s) still pending.[/dim]"
-        )
+        console.print(f"\n[dim]{remaining_count} staged file(s) still pending.[/dim]")
         if not yes and not Confirm.ask("Continue to next commit?", default=True):
             console.print(f"[dim]Stopped. {commits_made} commit(s) created. Remaining files stay staged.[/dim]")
             break

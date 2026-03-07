@@ -80,6 +80,45 @@ def get_unstaged_files(cwd: Path | None = None) -> list[str]:
     return [f.path for f in get_changed_files(cwd) if f.unstaged]
 
 
+def get_stageable_files(cwd: Path | None = None) -> list[FileStatus]:
+    """
+    Return all files that can be staged: unstaged modifications and untracked files.
+    Excludes files that are already fully staged.
+    """
+    output = _run(["git", "status", "--porcelain"], cwd=cwd)
+    files: list[FileStatus] = []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        index_code = line[0]
+        worktree_code = line[1]
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ")[-1]
+
+        is_untracked = index_code == "?" and worktree_code == "?"
+        is_unstaged_mod = worktree_code not in (" ", "?", "!")
+        already_fully_staged = index_code not in (" ", "?", "!") and worktree_code == " "
+
+        if already_fully_staged:
+            continue
+        if is_untracked or is_unstaged_mod:
+            files.append(FileStatus(
+                path=path,
+                staged=False,
+                unstaged=is_unstaged_mod,
+                status_code="?" if is_untracked else worktree_code,
+            ))
+    return files
+
+
+def stage_files(paths: list[str], cwd: Path | None = None) -> None:
+    """Stage the given files (git add)."""
+    if not paths:
+        return
+    _run(["git", "add", "--", *paths], cwd=cwd)
+
+
 def get_staged_diff(cwd: Path | None = None) -> str:
     try:
         return _run(["git", "diff", "--cached"], cwd=cwd)
