@@ -8,6 +8,7 @@ class RepositoryChangeSummary(BaseModel):
     file_categories: dict[str, int]
     inferred_scope: str | None = None
     summary_text: str
+    mixed_areas: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class CommitSuggestion(BaseModel):

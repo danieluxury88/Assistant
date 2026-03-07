@@ -156,6 +156,30 @@ def infer_scope(paths: list[str]) -> str | None:
     return None
 
 
+def group_files_by_area(paths: list[str]) -> dict[str, list[str]]:
+    """
+    Group files by their high-level area, excluding noise.
+    Returns a dict of area -> [file paths].
+    """
+    groups: dict[str, list[str]] = {}
+    for path in paths:
+        if is_noisy(path):
+            continue
+        cat = classify_file(path)
+        area = get_area(cat)
+        if area in ("noise",):
+            continue
+        if area == "unknown":
+            area = "other"
+        groups.setdefault(area, []).append(path)
+    return groups
+
+
+def is_mixed_changes(paths: list[str]) -> bool:
+    """Return True if files span more than one meaningful area."""
+    return len(group_files_by_area(paths)) > 1
+
+
 def _common_directory(paths: list[str]) -> str | None:
     """
     If all paths share a common top-level directory (under src/ or similar),

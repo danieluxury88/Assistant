@@ -69,3 +69,38 @@ def test_infer_scope_mixed():
     scope = infer_scope(files)
     # Mixed areas should return None
     assert scope is None
+
+
+def test_group_files_by_area_single():
+    from commit_sage.classifiers import group_files_by_area
+    files = ["src/main.py", "src/utils.py"]
+    groups = group_files_by_area(files)
+    assert list(groups.keys()) == ["backend"]
+    assert set(groups["backend"]) == {"src/main.py", "src/utils.py"}
+
+
+def test_group_files_by_area_mixed():
+    from commit_sage.classifiers import group_files_by_area
+    files = ["src/main.py", "app.css", "README.md"]
+    groups = group_files_by_area(files)
+    assert "backend" in groups
+    assert "frontend" in groups
+    assert "docs" in groups
+
+
+def test_group_files_by_area_excludes_noise():
+    from commit_sage.classifiers import group_files_by_area
+    files = ["src/main.py", "package-lock.json"]
+    groups = group_files_by_area(files)
+    assert "backend" in groups
+    assert "lock" not in groups
+
+
+def test_is_mixed_changes_true():
+    from commit_sage.classifiers import is_mixed_changes
+    assert is_mixed_changes(["src/main.py", "app.css", "README.md"]) is True
+
+
+def test_is_mixed_changes_false():
+    from commit_sage.classifiers import is_mixed_changes
+    assert is_mixed_changes(["src/main.py", "src/utils.py"]) is False

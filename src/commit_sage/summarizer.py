@@ -1,10 +1,14 @@
 """Build compact, AI-ready summaries from Git change data."""
 
-from pathlib import Path
-
-from commit_sage.classifiers import categorize_files, infer_scope, is_noisy, classify_file
-from commit_sage.diff_parser import compact_diff, count_diff_stats, parse_diff
-from commit_sage.git_tools import FileStatus
+from commit_sage.classifiers import (
+    categorize_files,
+    group_files_by_area,
+    infer_scope,
+    is_mixed_changes,
+    is_noisy,
+    classify_file,
+)
+from commit_sage.diff_parser import compact_diff, count_diff_stats, filter_diff_by_files
 from commit_sage.models import RepositoryChangeSummary
 
 
@@ -15,17 +19,40 @@ def build_summary(
     staged_diff: str,
     unstaged_diff: str,
     max_diff_lines: int = 300,
+    include_files: set[str] | None = None,
 ) -> RepositoryChangeSummary:
+    """
+    Build a RepositoryChangeSummary.
+
+    If include_files is given, only those files (and their diffs) are
+    included in the summary sent to the AI. The full staged/unstaged
+    file lists are still stored on the model for the CLI to reference.
+    """
     all_files = list({*staged_files, *unstaged_files})
-    categories = categorize_files(all_files)
-    scope = infer_scope(all_files)
+    mixed_areas = group_files_by_area(all_files)
+
+    # Determine which files feed into the AI summary
+    effective_staged = staged_files
+    effective_unstaged = unstaged_files
+    effective_staged_diff = staged_diff
+    effective_unstaged_diff = unstaged_diff
+
+    if include_files is not None:
+        effective_staged = [f for f in staged_files if f in include_files]
+        effective_unstaged = [f for f in unstaged_files if f in include_files]
+        effective_staged_diff = filter_diff_by_files(staged_diff, include_files)
+        effective_unstaged_diff = filter_diff_by_files(unstaged_diff, include_files)
+
+    effective_all = list({*effective_staged, *effective_unstaged})
+    categories = categorize_files(effective_all)
+    scope = infer_scope(effective_all)
 
     summary_text = _build_summary_text(
         branch=branch,
-        staged_files=staged_files,
-        unstaged_files=unstaged_files,
-        staged_diff=staged_diff,
-        unstaged_diff=unstaged_diff,
+        staged_files=effective_staged,
+        unstaged_files=effective_unstaged,
+        staged_diff=effective_staged_diff,
+        unstaged_diff=effective_unstaged_diff,
         max_diff_lines=max_diff_lines,
     )
 
@@ -36,6 +63,7 @@ def build_summary(
         file_categories=categories,
         inferred_scope=scope,
         summary_text=summary_text,
+        mixed_areas=mixed_areas,
     )
 
 

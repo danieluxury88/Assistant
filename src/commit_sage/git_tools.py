@@ -98,6 +98,20 @@ def has_staged_changes(cwd: Path | None = None) -> bool:
     return bool(get_staged_files(cwd))
 
 
+def unstage_files(paths: list[str], cwd: Path | None = None) -> None:
+    """Remove files from the staging area (git restore --staged)."""
+    if not paths:
+        return
+    _run(["git", "restore", "--staged", *paths], cwd=cwd)
+
+
+def discard_file_changes(paths: list[str], cwd: Path | None = None) -> None:
+    """Discard unstaged working-tree changes for the given files (git restore)."""
+    if not paths:
+        return
+    _run(["git", "restore", *paths], cwd=cwd)
+
+
 def create_commit(message: str, cwd: Path | None = None) -> str:
     output = _run(["git", "commit", "-m", message], cwd=cwd)
     return output.strip()

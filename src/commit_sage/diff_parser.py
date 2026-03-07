@@ -102,6 +102,23 @@ def compact_diff(diff_text: str, max_lines: int = 300) -> str:
     return "\n".join(sections)
 
 
+def filter_diff_by_files(diff_text: str, include_paths: set[str]) -> str:
+    """
+    Return only the diff sections for files in include_paths.
+    """
+    if not diff_text.strip():
+        return ""
+    file_diffs = parse_diff(diff_text)
+    kept = [fd for fd in file_diffs if fd.path in include_paths]
+    if not kept:
+        return ""
+    sections: list[str] = []
+    for fd in kept:
+        sections.append(f"--- {fd.path} (+{fd.added}/-{fd.removed})")
+        sections.append("\n".join(fd.hunks))
+    return "\n".join(sections)
+
+
 def count_diff_stats(diff_text: str) -> tuple[int, int]:
     """Return (total_added, total_removed) for the diff."""
     added = sum(1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++"))

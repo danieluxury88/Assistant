@@ -50,3 +50,35 @@ def test_build_summary_infers_scope():
     )
     # scope should be inferred
     assert summary.inferred_scope is not None
+
+
+def test_build_summary_mixed_areas_detected():
+    summary = build_summary(
+        branch="main",
+        staged_files=["src/main.py", "app.css", "README.md"],
+        unstaged_files=[],
+        staged_diff=SAMPLE_DIFF,
+        unstaged_diff="",
+    )
+    assert len(summary.mixed_areas) > 1
+    assert "backend" in summary.mixed_areas
+    assert "frontend" in summary.mixed_areas
+    assert "docs" in summary.mixed_areas
+
+
+def test_build_summary_include_files_filters_summary():
+    summary = build_summary(
+        branch="main",
+        staged_files=["src/main.py", "app.css"],
+        unstaged_files=[],
+        staged_diff=SAMPLE_DIFF,
+        unstaged_diff="",
+        include_files={"src/main.py"},
+    )
+    # Full staged_files list is preserved on the model
+    assert "src/main.py" in summary.staged_files
+    assert "app.css" in summary.staged_files
+    # But the AI summary text only includes selected file
+    assert "main.py" in summary.summary_text
+    # app.css is not in the effective diff (SAMPLE_DIFF only has main.py)
+    assert "python" in summary.file_categories

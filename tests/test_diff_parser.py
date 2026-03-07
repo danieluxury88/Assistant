@@ -1,4 +1,4 @@
-from commit_sage.diff_parser import parse_diff, compact_diff, count_diff_stats
+from commit_sage.diff_parser import parse_diff, compact_diff, count_diff_stats, filter_diff_by_files
 
 SAMPLE_DIFF = """\
 diff --git a/src/main.py b/src/main.py
@@ -53,3 +53,36 @@ def test_compact_diff_truncation():
 def test_parse_diff_empty():
     diffs = parse_diff("")
     assert diffs == []
+
+
+TWO_FILE_DIFF = """\
+diff --git a/src/main.py b/src/main.py
+index abc1234..def5678 100644
+--- a/src/main.py
++++ b/src/main.py
+@@ -1,2 +1,3 @@
+ x = 1
++y = 2
+diff --git a/app.css b/app.css
+index 000..111 100644
+--- a/app.css
++++ b/app.css
+@@ -1,2 +1,3 @@
+ body {}
++h1 { color: red; }
+"""
+
+
+def test_filter_diff_keeps_selected():
+    result = filter_diff_by_files(TWO_FILE_DIFF, {"src/main.py"})
+    assert "src/main.py" in result
+    assert "app.css" not in result
+
+
+def test_filter_diff_empty_when_no_match():
+    result = filter_diff_by_files(TWO_FILE_DIFF, {"other.py"})
+    assert result == ""
+
+
+def test_filter_diff_empty_input():
+    assert filter_diff_by_files("", {"src/main.py"}) == ""
