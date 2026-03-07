@@ -1,0 +1,12 @@
+Analyze the following Git changes and generate a commit message.
+
+{summary}
+
+Respond with JSON in exactly this format:
+{
+  "commit_type": "<type>",
+  "scope": "<scope or null>",
+  "subject": "<concise imperative subject, max 72 chars>",
+  "body": null,
+  "confidence": <float 0.0-1.0>
+}

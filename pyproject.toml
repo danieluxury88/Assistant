@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "commit-sage"
+version = "0.1.0"
+description = "AI-assisted Git commit message generator"
+requires-python = ">=3.11"
+dependencies = [
+    "typer[all]>=0.12",
+    "rich>=13",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "anthropic>=0.25",
+]
+
+[project.scripts]
+commit-sage = "commit_sage.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-mock>=3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/commit_sage"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
