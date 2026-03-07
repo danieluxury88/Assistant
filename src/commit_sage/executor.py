@@ -16,6 +16,7 @@ def confirm_and_commit(
     suggestion: CommitSuggestion,
     cwd: Path | None = None,
     auto_confirm: bool = False,
+    include_files: list[str] | None = None,
 ) -> bool:
     """
     Show the final suggestion, ask for confirmation, and create the commit.
@@ -34,7 +35,7 @@ def confirm_and_commit(
             return False
 
     try:
-        output = create_commit(full_message, cwd=cwd)
+        output = create_commit(full_message, cwd=cwd, paths=include_files)
         console.print(f"[bold green]Committed:[/bold green] {suggestion.format_subject()}")
         if output:
             console.print(f"[dim]{output}[/dim]")

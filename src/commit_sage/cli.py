@@ -70,19 +70,22 @@ def _handle_mixed_changes(
     cwd: Path,
     staged_only: bool = False,
     unstaged_only: bool = False,
-):
+) -> tuple:
     """
     When mixed/unrelated changes are detected, show the groups and ask
-    the user how to proceed. Returns a rebuilt summary (possibly filtered),
-    or raises typer.Exit if the user quits.
+    the user how to proceed.
+
+    Returns (summary, include_files | None):
+    - summary: rebuilt summary (possibly filtered for AI prompt)
+    - include_files: list of files to restrict the git commit to, or None for all
 
     Never unstages or discards anything without explicit user confirmation.
     """
-    from commit_sage.git_tools import unstage_files, discard_file_changes, GitError
+    from commit_sage.git_tools import GitError
 
     areas = summary.mixed_areas
     if len(areas) <= 1:
-        return summary
+        return summary, None
 
     # Display the mixed-changes warning
     console.print()
@@ -107,7 +110,6 @@ def _handle_mixed_changes(
 
     console.print(table)
 
-    # Build the menu
     valid_nums = [str(i) for i in range(1, len(area_list) + 1)]
     console.print(
         "\n[dim]Options:[/dim]\n"
@@ -127,10 +129,11 @@ def _handle_mixed_changes(
         raise typer.Exit(0)
 
     if choice == "a":
-        return summary
+        return summary, None
 
     if choice == "d":
-        return _handle_discard(summary, cwd)
+        new_summary = _handle_discard(summary, cwd)
+        return new_summary, None
 
     if choice in valid_nums:
         idx = int(choice) - 1
@@ -142,21 +145,25 @@ def _handle_mixed_changes(
             f"({len(selected_files)} file{'s' if len(selected_files) != 1 else ''}).[/dim]"
         )
 
-        # Rebuild summary with only the selected files
-        return _load_summary(cwd, staged_only=staged_only, unstaged_only=unstaged_only, include_files=include)
+        filtered_summary = _load_summary(
+            cwd,
+            staged_only=staged_only,
+            unstaged_only=unstaged_only,
+            include_files=include,
+        )
+        return filtered_summary, selected_files
 
-    # Unrecognised — treat as proceed with all
     console.print("[dim]Unrecognised choice — proceeding with all changes.[/dim]")
-    return summary
+    return summary, None
 
 
 def _handle_discard(summary, cwd: Path):
     """
-    Interactive discard: show staged files, ask which to unstage/revert.
+    Interactive discard: show staged files, ask which to unstage.
     Never touches the filesystem without explicit per-file confirmation.
-    Returns a rebuilt summary after any changes.
+    Returns a rebuilt summary after any unstaging.
     """
-    from commit_sage.git_tools import unstage_files, discard_file_changes, GitError
+    from commit_sage.git_tools import unstage_files, GitError
 
     all_staged = summary.staged_files
     if not all_staged:
@@ -167,10 +174,10 @@ def _handle_discard(summary, cwd: Path):
     for i, f in enumerate(all_staged, start=1):
         console.print(f"  [cyan]{i}[/cyan]  {f}")
 
-    console.print(
-        "\nEnter file numbers to [bold red]unstage[/bold red] (space-separated), or press Enter to cancel:"
-    )
-    raw = Prompt.ask("Files to unstage", default="").strip()
+    raw = Prompt.ask(
+        "\nEnter file numbers to [bold red]unstage[/bold red] (space-separated), or press Enter to cancel",
+        default="",
+    ).strip()
 
     if not raw:
         console.print("[dim]No changes made.[/dim]")
@@ -207,7 +214,6 @@ def _handle_discard(summary, cwd: Path):
         err_console.print(f"[bold red]Git error:[/bold red] {e}")
         raise typer.Exit(1)
 
-    # Reload summary after unstaging
     return _load_summary(cwd)
 
 
@@ -294,7 +300,7 @@ def suggest(
 
     # Handle mixed changes interactively
     if len(summary.mixed_areas) > 1:
-        summary = _handle_mixed_changes(summary, cwd, staged_only=staged_only, unstaged_only=unstaged_only)
+        summary, _ = _handle_mixed_changes(summary, cwd, staged_only=staged_only, unstaged_only=unstaged_only)
 
     with console.status("[bold blue]Asking AI for a commit suggestion...[/bold blue]"):
         try:
@@ -335,8 +341,9 @@ def commit(
         raise typer.Exit(1)
 
     # Handle mixed changes interactively
+    include_files: list[str] | None = None
     if len(summary.mixed_areas) > 1:
-        summary = _handle_mixed_changes(summary, cwd, staged_only=staged_only)
+        summary, include_files = _handle_mixed_changes(summary, cwd, staged_only=staged_only)
 
     # Re-check staged files after possible unstaging
     if not summary.staged_files:
@@ -351,7 +358,7 @@ def commit(
             raise typer.Exit(1)
 
     _render_suggestion(suggestion)
-    confirm_and_commit(suggestion, cwd=cwd, auto_confirm=yes)
+    confirm_and_commit(suggestion, cwd=cwd, auto_confirm=yes, include_files=include_files)
 
 
 def _render_suggestion(suggestion) -> None:

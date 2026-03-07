@@ -112,6 +112,18 @@ def discard_file_changes(paths: list[str], cwd: Path | None = None) -> None:
     _run(["git", "restore", *paths], cwd=cwd)
 
 
-def create_commit(message: str, cwd: Path | None = None) -> str:
-    output = _run(["git", "commit", "-m", message], cwd=cwd)
+def create_commit(
+    message: str,
+    cwd: Path | None = None,
+    paths: list[str] | None = None,
+) -> str:
+    """
+    Create a git commit with the given message.
+    If paths is provided, only those files are committed (git commit -- file …),
+    leaving other staged files in the index for subsequent commits.
+    """
+    cmd = ["git", "commit", "-m", message]
+    if paths:
+        cmd += ["--"] + paths
+    output = _run(cmd, cwd=cwd)
     return output.strip()
