@@ -102,5 +102,5 @@
 - [ ] `docs/architecture.md` — fill in
 - [ ] `docs/roadmap.md` — fill in
 - [ ] `docs/prompts.md` — document prompt design
-- [ ] Install as global uv tool (`uv tool install .`)
+- [x] Install as global uv tool (`uv tool install .`)
 - [ ] README.md
