@@ -1,24 +1,25 @@
-# 🧙‍♂️ CommitSage
+# CommitSage
 
-> ✨ Your AI-powered companion for crafting perfect Git commit messages
+> Your AI-powered companion for crafting perfect Git commit messages
 
-CommitSage is a smart CLI tool that analyzes your Git changes and helps you write clear, consistent, and meaningful commit messages. Say goodbye to "fix stuff" and "wip" commits! 🎯
+CommitSage is a smart CLI tool that analyzes your Git changes and helps you write clear, consistent, and meaningful commit messages. Say goodbye to "fix stuff" and "wip" commits!
 
-## 🌟 Features
+## Features
 
-- 🔍 **Smart Change Analysis** — Inspects staged and unstaged changes automatically
-- 🤖 **AI-Powered Suggestions** — Uses Claude to generate high-quality conventional commit messages
-- 🎨 **Beautiful Terminal UI** — Powered by Rich for a delightful command-line experience
-- 🧩 **Mixed Change Detection** — Identifies unrelated changes and suggests splitting them into separate commits
-- ⚙️ **Configurable** — Customize AI model, commit style, and ignore patterns
-- 🚀 **Fast & Local-First** — Designed for efficient daily Git workflows
-- 📦 **Zero Configuration** — Works out of the box with sensible defaults
+- **Smart Change Analysis** — Inspects staged and unstaged changes automatically
+- **AI-Powered Suggestions** — Uses Claude to generate high-quality conventional commit messages
+- **Beautiful Terminal UI** — Powered by Rich for a delightful command-line experience
+- **Mixed Change Detection** — Identifies unrelated changes and suggests splitting them into separate commits
+- **Configurable** — Customize AI model, commit style, and ignore patterns
+- **Fast & Local-First** — Designed for efficient daily Git workflows
+- **Zero Configuration** — Works out of the box with sensible defaults
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
 - Python 3.11 or higher
+- [uv](https://docs.astral.sh/uv/) package manager
 - Git repository
 - Anthropic API key
 
@@ -29,11 +30,21 @@ CommitSage is a smart CLI tool that analyzes your Git changes and helps you writ
 git clone <repository-url>
 cd commit-sage
 
-# Install with pip
-pip install -e .
+# Install dependencies
+uv sync
 
-# Or install with dev dependencies
-pip install -e ".[dev]"
+# Install dev dependencies (for testing)
+uv sync --dev
+```
+
+### Install as a global tool
+
+```bash
+# Install commit-sage as a globally available command
+uv tool install .
+
+# Verify installation
+commit-sage --version
 ```
 
 ### Set up your API key
@@ -43,10 +54,13 @@ pip install -e ".[dev]"
 export ANTHROPIC_API_KEY="your-api-key-here"
 
 # Or add it to your ~/.bashrc or ~/.zshrc for persistence
-echo 'export ANTHROPIC_API_KEY="your-api-key-here"' >> ~/.bashrc
+echo 'export ANTHROPIC_API_KEY="your-api-key-here"' >> ~/.zshrc
+
+# Or create a .env file in the project root
+echo 'ANTHROPIC_API_KEY=your-api-key-here' > .env
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Stage your changes
@@ -59,9 +73,9 @@ commit-sage suggest
 commit-sage commit
 ```
 
-That's it! CommitSage will analyze your changes and suggest a well-structured commit message. ✨
+That's it! CommitSage will analyze your changes and suggest a well-structured commit message.
 
-## 💡 Usage
+## Usage
 
 ### Basic Commands
 
@@ -69,17 +83,17 @@ That's it! CommitSage will analyze your changes and suggest a well-structured co
 # Get a commit message suggestion for staged changes
 commit-sage suggest
 
-# Include unstaged changes in the analysis
-commit-sage suggest --all
-
-# Only analyze staged changes
-commit-sage suggest --staged
-
 # Generate and create a commit in one step
 commit-sage commit
 
-# Show project information
-commit-sage info
+# Skip confirmation prompt (useful for scripts)
+commit-sage commit --yes
+
+# Auto-stage all unstaged/untracked files, then commit
+commit-sage commit --all
+
+# Analyze staged and unstaged changes without committing
+commit-sage analyze
 
 # Display version
 commit-sage --version
@@ -88,21 +102,44 @@ commit-sage --version
 ### Example Output
 
 ```
-🔍 Analyzing your changes...
+Analyzing changes...
 
-┌─ Suggested Commit Message ─────────────────────────┐
-│ feat(cli): add interactive commit confirmation     │
-│                                                     │
-│ Adds user confirmation prompt before creating      │
-│ commits to prevent accidental commits               │
-│                                                     │
-│ Confidence: 95%                                    │
-└─────────────────────────────────────────────────────┘
+ Suggested Commit
+ feat(cli): add interactive commit confirmation
 
-✅ Create this commit? [y/N]:
+ Body
+ Adds user confirmation prompt before creating commits to
+ prevent accidental commits
+
+Confidence: ████████░░ 82%
+
+Create this commit? [Y/n]:
 ```
 
-## ⚙️ Configuration
+### Mixed Changes
+
+When staged files span unrelated areas (e.g. backend + docs + frontend), CommitSage detects this and offers to split them into separate commits:
+
+```
+Mixed changes detected — your staged changes span multiple unrelated areas.
+
+ #   Area       Files
+ 1   backend    src/auth.py, src/models.py
+ 2   docs       README.md
+ 3   frontend   app.css
+
+Options:
+  a   Proceed with all changes (one commit)
+  1   Include only backend files
+  2   Include only docs files
+  3   Include only frontend files
+  d   Discard specific staged files (will confirm before any change)
+  q   Quit
+
+Your choice [a]:
+```
+
+## Configuration
 
 CommitSage looks for configuration in `config/default.toml` or you can create your own config file.
 
@@ -135,11 +172,11 @@ patterns = [
 
 - **AI Provider**: Currently supports Anthropic (Claude)
 - **Model**: Choose your preferred Claude model
-- **Commit Style**: Conventional commits (more styles coming soon!)
+- **Commit Style**: Conventional commits
 - **Max Diff Lines**: Limit how much diff context to send to the AI
 - **Ignore Patterns**: Files to exclude from analysis
 
-## 🏗️ Architecture
+## Architecture
 
 CommitSage is built with a modular architecture:
 
@@ -150,8 +187,9 @@ CommitSage is built with a modular architecture:
 - **LLM Client** (`llm_client.py`) — Communicates with AI providers
 - **Commit Generator** (`commit_generator.py`) — Creates structured commit messages
 - **Prompt Builder** (`prompt_builder.py`) — Crafts effective AI prompts
+- **Executor** (`executor.py`) — Handles confirmation and git commit execution
 
-## 🎯 Commit Message Format
+## Commit Message Format
 
 CommitSage generates **Conventional Commits** following this format:
 
@@ -162,6 +200,7 @@ CommitSage generates **Conventional Commits** following this format:
 ```
 
 ### Types
+
 - `feat` — New feature
 - `fix` — Bug fix
 - `docs` — Documentation changes
@@ -174,33 +213,40 @@ CommitSage generates **Conventional Commits** following this format:
 - `chore` — Other changes (maintenance, etc.)
 - `revert` — Revert a previous commit
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=commit_sage
+uv run pytest --cov=commit_sage
 
 # Run specific test file
-pytest tests/test_commit_generator.py
+uv run pytest tests/test_commit_generator.py
 ```
 
-## 🗺️ Roadmap
+## GitMan Integration
 
-- [ ] 🦙 Support for local inference with `llama.cpp`
-- [ ] 🔀 Automatic commit splitting for mixed changes
-- [ ] 📚 Commit history learning for project-aware messages
-- [ ] 🌍 Multi-language support
-- [ ] 🎨 Custom commit templates
-- [ ] 📊 Commit statistics and insights
-- [ ] 🔄 Git hooks integration
-- [ ] 🎭 Multiple AI provider support (OpenAI, local models, etc.)
+CommitSage integrates with GitMan to replace generic "Automatic commit" messages with AI-generated ones. When `gitman push` runs on owned repositories, it calls `commit-sage commit --yes` to generate a meaningful commit message automatically.
 
-## 🤝 Contributing
+See [docs/gitman-integration.md](docs/gitman-integration.md) for full details.
 
-Contributions are welcome! This is a local-first tool designed for developer productivity, and we'd love your input.
+## Roadmap
+
+- [ ] Local inference with `llama.cpp` (Phase 3)
+- [ ] Commit history learning for project-aware messages
+- [ ] Multi-language support
+- [ ] Custom commit templates
+- [ ] `commit-sage config` command
+- [ ] `commit-sage group` command — suggest logical commit splits
+- [ ] Suggestion alternatives (pick from 2-3 options)
+- [ ] Regenerate loop (try again without re-running)
+- [ ] Inline message editing before commit
+
+## Contributing
+
+Contributions are welcome! This is a local-first tool designed for developer productivity.
 
 ### Development Setup
 
@@ -210,27 +256,27 @@ git clone <repository-url>
 cd commit-sage
 
 # Install in development mode with dev dependencies
-pip install -e ".[dev]"
+uv sync --dev
 
 # Run tests
-pytest
+uv run pytest
 
-# Make your changes and submit a PR!
+# Run the CLI locally
+uv run commit-sage --help
 ```
 
-## 📄 License
+## License
 
 See the LICENSE file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [Typer](https://typer.tiangolo.com/) for the CLI
 - Styled with [Rich](https://rich.readthedocs.io/) for beautiful terminal output
 - Powered by [Anthropic's Claude](https://www.anthropic.com/) for AI capabilities
 - Follows [Conventional Commits](https://www.conventionalcommits.org/) specification
+- Package management by [uv](https://docs.astral.sh/uv/)
 
 ---
 
-Made with ❤️ for developers who care about clean Git history
-
-**Happy Committing!** 🎉
+Made with care for developers who value clean Git history. Happy Committing!
