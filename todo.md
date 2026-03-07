@@ -61,6 +61,16 @@
 
 ---
 
+## GitMan Integration (DONE)
+
+- [x] Document integration strategy in `docs/gitman-integration.md`
+- [x] Add `--yes` flag to `commit` command (skip all interactive prompts)
+- [x] Add `--all` flag to `commit` command (auto-stage unstaged/untracked files without prompting)
+- [x] When `--yes` is set, bypass mixed-change interactive menu (commit all as one)
+- [x] Update `gitman perform_git_push()`: stage with `git add .`, then call `commit-sage commit --yes` with fallback to "Automatic commit"
+
+---
+
 ## Phase 3 — Local AI
 
 - [ ] `llama.cpp` HTTP inference client (same interface as Anthropic client)

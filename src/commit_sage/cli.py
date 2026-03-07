@@ -383,13 +383,15 @@ def suggest(
 @app.command()
 def commit(
     staged_only: bool = typer.Option(False, "--staged-only", help="Use only staged changes."),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt and all interactive prompts."),
+    all_files: bool = typer.Option(False, "--all", "-a", help="Auto-stage all unstaged/untracked files before committing."),
     model: str = typer.Option(None, "--model", "-m", help="Override AI model name."),
 ) -> None:
     """Generate commit suggestions and commit all staged changes, one group at a time."""
     from commit_sage.commit_generator import generate_suggestion
     from commit_sage.executor import confirm_and_commit
     from commit_sage.llm_client import LLMError
+    from commit_sage.git_tools import get_stageable_files, stage_files, GitError
     from rich.prompt import Confirm
 
     cwd = _require_git_repo()
@@ -401,6 +403,19 @@ def commit(
 
         if not summary.staged_files:
             if commits_made == 0:
+                if all_files:
+                    # Auto-stage everything without prompting
+                    candidates = get_stageable_files(cwd)
+                    if not candidates:
+                        console.print("[yellow]Nothing to stage or commit.[/yellow]")
+                        raise typer.Exit(1)
+                    try:
+                        stage_files([f.path for f in candidates], cwd=cwd)
+                        console.print(f"[green]Auto-staged {len(candidates)} file(s).[/green]")
+                    except GitError as e:
+                        err_console.print(f"[bold red]Git error:[/bold red] {e}")
+                        raise typer.Exit(1)
+                    continue
                 # Nothing staged — offer to stage unstaged/untracked files
                 staged_any = _offer_staging(cwd)
                 if not staged_any:
@@ -422,9 +437,9 @@ def commit(
                     )
                 break
 
-        # Handle mixed changes interactively
+        # Handle mixed changes interactively (skipped in non-interactive mode)
         include_files: list[str] | None = None
-        if len(summary.mixed_areas) > 1:
+        if len(summary.mixed_areas) > 1 and not yes:
             summary, include_files = _handle_mixed_changes(summary, cwd, staged_only=staged_only)
 
         # Re-check after possible unstaging
