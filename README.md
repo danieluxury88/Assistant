@@ -7,7 +7,7 @@ CommitSage is a smart CLI tool that analyzes your Git changes and helps you writ
 ## Features
 
 - **Smart Change Analysis** — Inspects staged and unstaged changes automatically
-- **AI-Powered Suggestions** — Uses Claude to generate high-quality conventional commit messages
+- **AI-Powered Suggestions** — Uses Claude or OpenAI models to generate high-quality conventional commit messages
 - **Beautiful Terminal UI** — Powered by Rich for a delightful command-line experience
 - **Mixed Change Detection** — Identifies unrelated changes and suggests splitting them into separate commits
 - **Configurable** — Customize AI model, commit style, and ignore patterns
@@ -21,7 +21,7 @@ CommitSage is a smart CLI tool that analyzes your Git changes and helps you writ
 - Python 3.11 or higher
 - [uv](https://docs.astral.sh/uv/) package manager
 - Git repository
-- Anthropic API key
+- Anthropic or OpenAI API key
 
 ### Install from source
 
@@ -50,10 +50,19 @@ commit-sage --version
 ### Set up your API key
 
 ```bash
-# Add your Anthropic API key to your environment
+# Anthropic
 export ANTHROPIC_API_KEY="your-api-key-here"
 
-# Or add it to your ~/.bashrc or ~/.zshrc for persistence
+# OpenAI
+export OPENAI_API_KEY="your-api-key-here"
+
+# Optional when both providers are configured
+export COMMIT_SAGE_PROVIDER="openai"
+
+# Optional for compatible gateways
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+
+# Or add one of them to your ~/.bashrc or ~/.zshrc for persistence
 echo 'export ANTHROPIC_API_KEY="your-api-key-here"' >> ~/.zshrc
 
 # Or create a .env file in the project root
@@ -147,7 +156,7 @@ CommitSage looks for configuration in `config/default.toml` or you can create yo
 
 ```toml
 [ai]
-provider = "anthropic"
+provider = "anthropic" # optional override when multiple keys are present
 model = "claude-haiku-4-5-20251001"
 
 [commit]
@@ -170,8 +179,9 @@ patterns = [
 
 ### Customization Options
 
-- **AI Provider**: Currently supports Anthropic (Claude)
-- **Model**: Choose your preferred Claude model
+- **AI Provider**: Auto-detected from `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+- **Provider Override**: Set `COMMIT_SAGE_PROVIDER` to `anthropic` or `openai`
+- **Model**: Choose any model supported by the selected provider
 - **Commit Style**: Conventional commits
 - **Max Diff Lines**: Limit how much diff context to send to the AI
 - **Ignore Patterns**: Files to exclude from analysis
@@ -229,6 +239,11 @@ uv run pytest tests/test_commit_generator.py
 ## GitMan Integration
 
 CommitSage integrates with GitMan to replace generic "Automatic commit" messages with AI-generated ones. When `gitman push` runs on owned repositories, it calls `commit-sage commit --yes` to generate a meaningful commit message automatically.
+
+Provider detection happens at runtime:
+- `ANTHROPIC_API_KEY` present: uses Anthropic
+- `OPENAI_API_KEY` present: uses OpenAI
+- both present: defaults to Anthropic unless `COMMIT_SAGE_PROVIDER` is set
 
 See [docs/gitman-integration.md](docs/gitman-integration.md) for full details.
 

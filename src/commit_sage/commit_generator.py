@@ -1,6 +1,6 @@
 """Transform AI output into structured CommitSuggestion objects."""
 
-from commit_sage.llm_client import call_anthropic, parse_json_response, LLMError
+from commit_sage.llm_client import call_llm, parse_json_response, LLMError
 from commit_sage.models import CommitSuggestion, RepositoryChangeSummary
 from commit_sage.prompt_builder import build_prompt
 
@@ -19,7 +19,7 @@ def generate_suggestion(
     Raises LLMError if the API call fails.
     """
     system_prompt, user_prompt = build_prompt(summary)
-    raw_response = call_anthropic(system_prompt, user_prompt, model=model)
+    raw_response = call_llm(system_prompt, user_prompt, model=model)
     data = parse_json_response(raw_response)
     return _parse_suggestion(data, summary)
 

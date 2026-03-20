@@ -1,27 +1,53 @@
-"""AI provider client — Phase 1: Anthropic API."""
+"""AI provider clients."""
 
 import json
 from typing import Any
 
 import anthropic
 
-from commit_sage.config import get_settings
+try:
+    import openai
+except ImportError:
+    openai = None
+
+from commit_sage.config import get_settings, resolve_ai_provider, resolve_model
 
 
 class LLMError(Exception):
     pass
 
 
+def call_llm(
+    system_prompt: str,
+    user_prompt: str,
+    model: str | None = None,
+) -> str:
+    settings = get_settings()
+
+    try:
+        provider = resolve_ai_provider(settings, require_credentials=True)
+    except ValueError as e:
+        raise LLMError(str(e)) from e
+
+    if provider == "anthropic":
+        return call_anthropic(system_prompt, user_prompt, model=model, settings=settings)
+    if provider == "openai":
+        return call_openai(system_prompt, user_prompt, model=model, settings=settings)
+
+    raise LLMError(f"Unsupported AI provider '{provider}'.")
+
+
 def call_anthropic(
     system_prompt: str,
     user_prompt: str,
     model: str | None = None,
+    settings=None,
 ) -> str:
     """
     Call the Anthropic API and return the raw text response.
     Raises LLMError on failure.
     """
-    settings = get_settings()
+    settings = settings or get_settings()
     api_key = settings.anthropic_api_key
     if not api_key:
         raise LLMError(
@@ -29,7 +55,7 @@ def call_anthropic(
             "Add it to your .env file or environment variables."
         )
 
-    resolved_model = model or settings.commit_sage_model
+    resolved_model = resolve_model("anthropic", settings, model)
 
     client = anthropic.Anthropic(api_key=api_key)
 
@@ -49,6 +75,54 @@ def call_anthropic(
         raise LLMError(f"Connection error: {e}") from e
     except anthropic.APIError as e:
         raise LLMError(f"API error: {e}") from e
+
+
+def call_openai(
+    system_prompt: str,
+    user_prompt: str,
+    model: str | None = None,
+    settings=None,
+) -> str:
+    """
+    Call the OpenAI Responses API and return the text response.
+    Raises LLMError on failure.
+    """
+    settings = settings or get_settings()
+    api_key = settings.openai_api_key
+    if not api_key:
+        raise LLMError(
+            "OPENAI_API_KEY is not set. "
+            "Add it to your .env file or environment variables."
+        )
+
+    if openai is None:
+        raise LLMError(
+            "OPENAI_API_KEY is set, but the 'openai' package is not installed. "
+            "Install dependencies again before using the OpenAI provider."
+        )
+
+    resolved_model = resolve_model("openai", settings, model)
+
+    client_kwargs = {"api_key": api_key}
+    if settings.openai_base_url.strip():
+        client_kwargs["base_url"] = settings.openai_base_url.strip()
+
+    client = openai.OpenAI(**client_kwargs)
+
+    try:
+        response = client.responses.create(
+            model=resolved_model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        text = getattr(response, "output_text", "")
+        if text:
+            return text
+        raise LLMError("OpenAI returned an empty response.")
+    except Exception as e:
+        raise LLMError(f"OpenAI API error: {e}") from e
 
 
 def parse_json_response(text: str) -> dict[str, Any]:

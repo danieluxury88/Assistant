@@ -250,6 +250,11 @@ commit-sage --version
 ```bash
 # Add to your shell configuration (~/.bashrc or ~/.zshrc)
 export ANTHROPIC_API_KEY="your-api-key-here"
+# or
+export OPENAI_API_KEY="your-api-key-here"
+
+# Optional when both providers are configured
+export COMMIT_SAGE_PROVIDER="openai"
 
 # Reload your shell configuration
 source ~/.bashrc  # or source ~/.zshrc
@@ -440,6 +445,12 @@ perform_git_push_preview() {
 - Network issues may cause CommitSage to fail
 - Missing API keys should fall back gracefully
 - Ensure push continues even if commit message generation fails
+
+### Provider Detection
+- `ANTHROPIC_API_KEY` -> Anthropic
+- `OPENAI_API_KEY` -> OpenAI
+- both present -> Anthropic unless `COMMIT_SAGE_PROVIDER` is set
+- `OPENAI_BASE_URL` can be used for compatible OpenAI-style gateways
 
 ## 📝 Next Steps
 

@@ -72,7 +72,7 @@ def test_format_subject_without_scope():
 def test_generate_suggestion_calls_api():
     summary = _make_summary()
     mock_response = '{"commit_type": "feat", "scope": "auth", "subject": "add login", "body": null, "confidence": 0.8}'
-    with patch("commit_sage.commit_generator.call_anthropic", return_value=mock_response):
+    with patch("commit_sage.commit_generator.call_llm", return_value=mock_response):
         suggestion = generate_suggestion(summary)
     assert suggestion.commit_type == "feat"
     assert suggestion.subject == "add login"
