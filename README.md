@@ -47,26 +47,26 @@ uv tool install .
 commit-sage --version
 ```
 
-### Set up your API key
+### Choose a model profile
+
+CommitSage talks to a model through a **profile**. Out of the box there are two, `claude` (Anthropic API) and `openai` (OpenAI API), both billed per token. Add your own in `~/.config/commit-sage/config.toml`; [config/profiles.example.toml](config/profiles.example.toml) shows every kind:
+
+| Kind | `provider` | Example |
+| --- | --- | --- |
+| Per token (API key) | `anthropic` or `openai` | Anthropic, OpenAI, or any hosted OpenAI-compatible API via `base_url` (OpenRouter, Groq, ...) |
+| Local | `openai` with `base_url` | llama.cpp / llama-swap, Ollama, LM Studio on `127.0.0.1` |
+| Subscription | `command` | A logged-in CLI that reads the prompt on stdin: `claude -p` (Claude Code), `codex exec` (ChatGPT) |
 
 ```bash
-# Anthropic
-export ANTHROPIC_API_KEY="your-api-key-here"
+mkdir -p ~/.config/commit-sage
+cp config/profiles.example.toml ~/.config/commit-sage/config.toml   # then edit default_profile
+commit-sage profiles                                                # list profiles, * marks the active one
+```
 
-# OpenAI
-export OPENAI_API_KEY="your-api-key-here"
+API keys never go in the profile file. A profile names the variable (`api_key_env = "ANTHROPIC_API_KEY"`), and CommitSage reads it from the environment, from `~/.config/commit-sage/.env`, or from a `.env` in the current directory:
 
-# Optional when both providers are configured
-export COMMIT_SAGE_PROVIDER="openai"
-
-# Optional for compatible gateways
-export OPENAI_BASE_URL="https://api.openai.com/v1"
-
-# Or add one of them to your ~/.bashrc or ~/.zshrc for persistence
-echo 'export ANTHROPIC_API_KEY="your-api-key-here"' >> ~/.zshrc
-
-# Or create a .env file in the project root
-echo 'ANTHROPIC_API_KEY=your-api-key-here' > .env
+```bash
+echo 'ANTHROPIC_API_KEY=your-api-key-here' >> ~/.config/commit-sage/.env
 ```
 
 ## Quick Start
@@ -103,6 +103,12 @@ commit-sage commit --all
 
 # Analyze staged and unstaged changes without committing
 commit-sage analyze
+
+# Use another model profile for one run (local, per token, subscription)
+commit-sage suggest --profile claude-code
+
+# List profiles; * marks the active one
+commit-sage profiles
 
 # Display version
 commit-sage --version
@@ -150,41 +156,27 @@ Your choice [a]:
 
 ## Configuration
 
-CommitSage looks for configuration in `config/default.toml` or you can create your own config file.
+| Setting | Where | Default |
+| --- | --- | --- |
+| Profile file | `~/.config/commit-sage/config.toml`, or the path in `COMMIT_SAGE_CONFIG` | built-in `claude` and `openai` profiles only |
+| Active profile | `--profile NAME`, then `COMMIT_SAGE_PROFILE`, then `default_profile` in the file | `claude` |
+| Model | `--model`, then `COMMIT_SAGE_MODEL`, then the profile's `model`, then the provider default | `claude-haiku-4-5-20251001` / `gpt-5-mini` |
+| Max diff lines | `COMMIT_SAGE_MAX_DIFF_LINES` | `300` |
+| Commit style | `COMMIT_SAGE_COMMIT_STYLE` | `conventional` |
 
-### Default Configuration
+Environment variables can also live in `~/.config/commit-sage/.env` or a `.env` in the current directory (the latter wins).
 
-```toml
-[ai]
-provider = "anthropic" # optional override when multiple keys are present
-model = "claude-haiku-4-5-20251001"
+Profile fields:
 
-[commit]
-style = "conventional"
-max_diff_lines = 300
-
-[ignore]
-patterns = [
-    "*.lock",
-    "*.min.js",
-    "*.min.css",
-    "package-lock.json",
-    "yarn.lock",
-    "composer.lock",
-    "*.generated.*",
-    "__pycache__/",
-    ".env",
-]
-```
-
-### Customization Options
-
-- **AI Provider**: Auto-detected from `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
-- **Provider Override**: Set `COMMIT_SAGE_PROVIDER` to `anthropic` or `openai`
-- **Model**: Choose any model supported by the selected provider
-- **Commit Style**: Conventional commits
-- **Max Diff Lines**: Limit how much diff context to send to the AI
-- **Ignore Patterns**: Files to exclude from analysis
+| Field | Used by | Meaning |
+| --- | --- | --- |
+| `provider` | all | `anthropic`, `openai` (any OpenAI-compatible Responses API) or `command` |
+| `model` | all | Model name; for `command`, substituted into `{model}` in the argv |
+| `api_key_env` | `anthropic`, `openai` | Name of the variable holding the key |
+| `api_key` | `openai` | Literal key, only for local servers that ignore it |
+| `base_url` | `openai` | Endpoint; empty means api.openai.com |
+| `command` | `command` | Argv that reads the prompt on stdin and prints the reply on stdout |
+| `description` | all | Shown by `commit-sage profiles` |
 
 ## Architecture
 
@@ -240,16 +232,13 @@ uv run pytest tests/test_commit_generator.py
 
 CommitSage integrates with GitMan to replace generic "Automatic commit" messages with AI-generated ones. When `gitman push` runs on owned repositories, it calls `commit-sage commit --yes` to generate a meaningful commit message automatically.
 
-Provider detection happens at runtime:
-- `ANTHROPIC_API_KEY` present: uses Anthropic
-- `OPENAI_API_KEY` present: uses OpenAI
-- both present: defaults to Anthropic unless `COMMIT_SAGE_PROVIDER` is set
+It uses the active profile (see [Configuration](#configuration)); set `COMMIT_SAGE_PROFILE` in GitMan's environment to choose another one.
 
 See [docs/gitman-integration.md](docs/gitman-integration.md) for full details.
 
 ## Roadmap
 
-- [ ] Local inference with `llama.cpp` (Phase 3)
+- [x] Local inference through any OpenAI-compatible server (llama.cpp / llama-swap, Ollama), via profiles
 - [ ] Commit history learning for project-aware messages
 - [ ] Multi-language support
 - [ ] Custom commit templates

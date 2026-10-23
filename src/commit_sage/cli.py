@@ -351,6 +351,7 @@ def suggest(
     staged_only: bool = typer.Option(False, "--staged-only", help="Use only staged changes."),
     unstaged_only: bool = typer.Option(False, "--unstaged-only", help="Use only unstaged changes."),
     model: str = typer.Option(None, "--model", "-m", help="Override AI model name."),
+    profile: str = typer.Option(None, "--profile", "-p", help="Model profile to use (see `commit-sage profiles`)."),
 ) -> None:
     """Generate an AI commit message suggestion."""
     from commit_sage.commit_generator import generate_suggestion
@@ -372,7 +373,7 @@ def suggest(
 
     with console.status("[bold blue]Asking AI for a commit suggestion...[/bold blue]"):
         try:
-            suggestion = generate_suggestion(summary, model=model)
+            suggestion = generate_suggestion(summary, model=model, profile=profile)
         except LLMError as e:
             err_console.print(f"[bold red]AI error:[/bold red] {e}")
             raise typer.Exit(1)
@@ -386,6 +387,7 @@ def commit(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt and all interactive prompts."),
     all_files: bool = typer.Option(False, "--all", "-a", help="Auto-stage all unstaged/untracked files before committing."),
     model: str = typer.Option(None, "--model", "-m", help="Override AI model name."),
+    profile: str = typer.Option(None, "--profile", "-p", help="Model profile to use (see `commit-sage profiles`)."),
 ) -> None:
     """Generate commit suggestions and commit all staged changes, one group at a time."""
     from commit_sage.commit_generator import generate_suggestion
@@ -449,7 +451,7 @@ def commit(
 
         with console.status("[bold blue]Asking AI for a commit suggestion...[/bold blue]"):
             try:
-                suggestion = generate_suggestion(summary, model=model)
+                suggestion = generate_suggestion(summary, model=model, profile=profile)
             except LLMError as e:
                 err_console.print(f"[bold red]AI error:[/bold red] {e}")
                 raise typer.Exit(1)
@@ -496,6 +498,37 @@ def _render_suggestion(suggestion) -> None:
         pct = int(suggestion.confidence * 100)
         bar = "█" * (pct // 10) + "░" * (10 - pct // 10)
         console.print(f"[dim]Confidence: {bar} {pct}%[/dim]")
+
+
+@app.command()
+def profiles() -> None:
+    """List the model profiles and which one is active."""
+    from commit_sage.config import config_path, get_settings, load_profiles, resolve_model, resolve_profile
+
+    settings = get_settings()
+    try:
+        _, available = load_profiles(settings)
+        active, _ = resolve_profile(settings)
+    except ValueError as e:
+        err_console.print(f"[bold red]Config error:[/bold red] {e}")
+        raise typer.Exit(1)
+
+    table = Table(box=box.SIMPLE)
+    table.add_column("")
+    table.add_column("Profile", style="cyan")
+    table.add_column("Provider")
+    table.add_column("Model")
+    table.add_column("Description", style="dim")
+    for name, prof in sorted(available.items()):
+        table.add_row(
+            "*" if name == active else "",
+            name,
+            prof.provider,
+            resolve_model(prof, settings) or "-",
+            prof.description,
+        )
+    console.print(table)
+    console.print(f"[dim]Config: {config_path(settings)} · override with --profile or COMMIT_SAGE_PROFILE[/dim]")
 
 
 @app.callback(invoke_without_command=True)

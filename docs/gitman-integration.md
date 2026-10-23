@@ -253,8 +253,8 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 # or
 export OPENAI_API_KEY="your-api-key-here"
 
-# Optional when both providers are configured
-export COMMIT_SAGE_PROVIDER="openai"
+# Optional: pick a profile from ~/.config/commit-sage/config.toml
+export COMMIT_SAGE_PROFILE="local"
 
 # Reload your shell configuration
 source ~/.bashrc  # or source ~/.zshrc
@@ -354,13 +354,13 @@ Add a CommitSage configuration per repository type:
 # In your gitman script, before calling CommitSage:
 case "$type" in
     drupal)
-        export COMMITSAGE_CONFIG="$HOME/.config/commitsage/drupal.toml"
+        export COMMIT_SAGE_CONFIG="$HOME/.config/commitsage/drupal.toml"
         ;;
     symfony)
-        export COMMITSAGE_CONFIG="$HOME/.config/commitsage/symfony.toml"
+        export COMMIT_SAGE_CONFIG="$HOME/.config/commit-sage/symfony.toml"
         ;;
     *)
-        export COMMITSAGE_CONFIG="$HOME/.config/commitsage/default.toml"
+        export COMMIT_SAGE_CONFIG="$HOME/.config/commit-sage/config.toml"
         ;;
 esac
 ```
@@ -446,11 +446,10 @@ perform_git_push_preview() {
 - Missing API keys should fall back gracefully
 - Ensure push continues even if commit message generation fails
 
-### Provider Detection
-- `ANTHROPIC_API_KEY` -> Anthropic
-- `OPENAI_API_KEY` -> OpenAI
-- both present -> Anthropic unless `COMMIT_SAGE_PROVIDER` is set
-- `OPENAI_BASE_URL` can be used for compatible OpenAI-style gateways
+### Provider Selection
+- The active profile decides the provider: `--profile`, then `COMMIT_SAGE_PROFILE`, then `default_profile` in `~/.config/commit-sage/config.toml`
+- Without a profile file the built-in `claude` profile (Anthropic API) is used
+- Local and subscription profiles need no API key; see the README's Configuration section
 
 ## 📝 Next Steps
 

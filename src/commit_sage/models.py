@@ -31,9 +31,6 @@ class CommitSuggestion(BaseModel):
 
 
 class AppConfig(BaseModel):
-    ai_provider: str = "anthropic"
-    api_model: str = "claude-haiku-4-5-20251001"
-    local_endpoint: str | None = None
     commit_style: str = "conventional"
     ignored_patterns: list[str] = Field(default_factory=list)
     max_diff_lines: int = 300

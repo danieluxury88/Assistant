@@ -1,6 +1,7 @@
 """AI provider clients."""
 
 import json
+import subprocess
 from typing import Any
 
 import anthropic
@@ -10,7 +11,9 @@ try:
 except ImportError:
     openai = None
 
-from commit_sage.config import get_settings, resolve_ai_provider, resolve_model
+from commit_sage.config import Profile, get_settings, resolve_api_key, resolve_model, resolve_profile
+
+COMMAND_TIMEOUT_SECONDS = 300
 
 
 class LLMError(Exception):
@@ -21,47 +24,54 @@ def call_llm(
     system_prompt: str,
     user_prompt: str,
     model: str | None = None,
+    profile: str | None = None,
 ) -> str:
     settings = get_settings()
 
     try:
-        provider = resolve_ai_provider(settings, require_credentials=True)
+        name, resolved = resolve_profile(settings, profile)
     except ValueError as e:
         raise LLMError(str(e)) from e
 
-    if provider == "anthropic":
-        return call_anthropic(system_prompt, user_prompt, model=model, settings=settings)
-    if provider == "openai":
-        return call_openai(system_prompt, user_prompt, model=model, settings=settings)
+    resolved_model = resolve_model(resolved, settings, model)
 
-    raise LLMError(f"Unsupported AI provider '{provider}'.")
+    if resolved.provider == "anthropic":
+        return call_anthropic(system_prompt, user_prompt, model=resolved_model, profile=resolved, name=name)
+    if resolved.provider == "openai":
+        return call_openai(system_prompt, user_prompt, model=resolved_model, profile=resolved, name=name)
+    if resolved.provider == "command":
+        return call_command(system_prompt, user_prompt, model=resolved_model, profile=resolved, name=name)
+
+    raise LLMError(f"Unsupported AI provider '{resolved.provider}'.")
+
+
+def _require_api_key(profile: Profile, name: str) -> str:
+    api_key = resolve_api_key(profile)
+    if not api_key:
+        source = profile.api_key_env or "api_key"
+        raise LLMError(
+            f"Profile '{name}' needs an API key: set {source} "
+            "in the environment or in ~/.config/commit-sage/.env."
+        )
+    return api_key
 
 
 def call_anthropic(
     system_prompt: str,
     user_prompt: str,
-    model: str | None = None,
-    settings=None,
+    model: str,
+    profile: Profile,
+    name: str = "",
 ) -> str:
     """
     Call the Anthropic API and return the raw text response.
     Raises LLMError on failure.
     """
-    settings = settings or get_settings()
-    api_key = settings.anthropic_api_key
-    if not api_key:
-        raise LLMError(
-            "ANTHROPIC_API_KEY is not set. "
-            "Add it to your .env file or environment variables."
-        )
-
-    resolved_model = resolve_model("anthropic", settings, model)
-
-    client = anthropic.Anthropic(api_key=api_key)
+    client = anthropic.Anthropic(api_key=_require_api_key(profile, name))
 
     try:
         message = client.messages.create(
-            model=resolved_model,
+            model=model,
             max_tokens=512,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
@@ -80,38 +90,29 @@ def call_anthropic(
 def call_openai(
     system_prompt: str,
     user_prompt: str,
-    model: str | None = None,
-    settings=None,
+    model: str,
+    profile: Profile,
+    name: str = "",
 ) -> str:
     """
-    Call the OpenAI Responses API and return the text response.
+    Call an OpenAI-compatible Responses API (OpenAI, or a local server via base_url).
     Raises LLMError on failure.
     """
-    settings = settings or get_settings()
-    api_key = settings.openai_api_key
-    if not api_key:
-        raise LLMError(
-            "OPENAI_API_KEY is not set. "
-            "Add it to your .env file or environment variables."
-        )
-
     if openai is None:
         raise LLMError(
-            "OPENAI_API_KEY is set, but the 'openai' package is not installed. "
-            "Install dependencies again before using the OpenAI provider."
+            "The 'openai' package is not installed. "
+            "Install dependencies again before using an OpenAI-compatible profile."
         )
 
-    resolved_model = resolve_model("openai", settings, model)
-
-    client_kwargs = {"api_key": api_key}
-    if settings.openai_base_url.strip():
-        client_kwargs["base_url"] = settings.openai_base_url.strip()
+    client_kwargs = {"api_key": _require_api_key(profile, name)}
+    if profile.base_url:
+        client_kwargs["base_url"] = profile.base_url
 
     client = openai.OpenAI(**client_kwargs)
 
     try:
         response = client.responses.create(
-            model=resolved_model,
+            model=model,
             input=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -123,6 +124,43 @@ def call_openai(
         raise LLMError("OpenAI returned an empty response.")
     except Exception as e:
         raise LLMError(f"OpenAI API error: {e}") from e
+
+
+def call_command(
+    system_prompt: str,
+    user_prompt: str,
+    model: str | None,
+    profile: Profile,
+    name: str = "",
+) -> str:
+    """
+    Run a CLI (e.g. a subscription-based agent such as `claude -p`) with the prompt on stdin
+    and return its stdout.
+    Raises LLMError on failure.
+    """
+    argv = [arg.replace("{model}", model or "") for arg in profile.command or []]
+    prompt = f"{system_prompt}\n\n{user_prompt}"
+
+    try:
+        result = subprocess.run(
+            argv,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except FileNotFoundError as e:
+        raise LLMError(f"Profile '{name}': command not found: {argv[0]}") from e
+    except subprocess.TimeoutExpired as e:
+        raise LLMError(f"Profile '{name}': command timed out after {COMMAND_TIMEOUT_SECONDS}s.") from e
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise LLMError(f"Profile '{name}': command exited with {result.returncode}: {detail}")
+    if not result.stdout.strip():
+        raise LLMError(f"Profile '{name}': command returned no output.")
+    return result.stdout
 
 
 def parse_json_response(text: str) -> dict[str, Any]:

@@ -13,13 +13,14 @@ VALID_TYPES = {
 def generate_suggestion(
     summary: RepositoryChangeSummary,
     model: str | None = None,
+    profile: str | None = None,
 ) -> CommitSuggestion:
     """
     Call the AI provider with the change summary and return a CommitSuggestion.
     Raises LLMError if the API call fails.
     """
     system_prompt, user_prompt = build_prompt(summary)
-    raw_response = call_llm(system_prompt, user_prompt, model=model)
+    raw_response = call_llm(system_prompt, user_prompt, model=model, profile=profile)
     data = parse_json_response(raw_response)
     return _parse_suggestion(data, summary)
 

@@ -1,0 +1,44 @@
+# CommitSage model profiles.
+# Copy to ~/.config/commit-sage/config.toml (or point COMMIT_SAGE_CONFIG at a file).
+# Pick one per run with --profile NAME or COMMIT_SAGE_PROFILE; otherwise default_profile is used.
+# Built-in profiles "claude" and "openai" always exist and can be redefined here.
+# API keys never go in this file: name the variable with api_key_env and set it in the
+# environment or in ~/.config/commit-sage/.env.
+
+default_profile = "local"
+
+# Local: any OpenAI-compatible server (llama.cpp / llama-swap, Ollama, LM Studio).
+[profiles.local]
+provider = "openai"
+base_url = "http://127.0.0.1:8081/v1"
+model = "qwen3.5-9b"
+api_key = "local"          # ignored by the server, required by the client library
+description = "Local Qwen3.5-9B on llama-swap"
+
+# Per token: Anthropic API.
+[profiles.claude]
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"
+api_key_env = "ANTHROPIC_API_KEY"
+description = "Anthropic API, billed per token"
+
+# Per token: any hosted OpenAI-compatible API (OpenAI, Groq, OpenRouter, ...).
+[profiles.openrouter]
+provider = "openai"
+base_url = "https://openrouter.ai/api/v1"
+model = "qwen/qwen3.5-9b"
+api_key_env = "OPENROUTER_API_KEY"
+description = "OpenRouter, billed per token"
+
+# Subscription: a logged-in CLI that reads the prompt on stdin and prints the reply.
+# "{model}" is replaced by the resolved model.
+[profiles.claude-code]
+provider = "command"
+command = ["claude", "-p", "--model", "{model}", "--tools", ""]
+model = "haiku"
+description = "Claude Code subscription (claude -p)"
+
+[profiles.codex]
+provider = "command"
+command = ["codex", "exec", "--skip-git-repo-check", "--sandbox", "read-only", "--ephemeral", "-"]
+description = "Codex / ChatGPT subscription (codex exec)"
